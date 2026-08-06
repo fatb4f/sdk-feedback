@@ -4,12 +4,21 @@ Store rollout evidence outside every Codex-writable workspace. Append each
 Codex SDK method result and streamed notification to a rollout-scoped JSONL
 event log. Existing records are never rewritten.
 
-AR0 proves producer-boundary-lossless capture over the pinned app-server and
-Python SDK observation surfaces. It retains every received payload exactly,
-assigns stable source identity, normalizes deterministically, and reconciles
-each payload or marks it explicitly unhandled. It does not claim universal
-process observability: an expected but unreceived event is not evidence that
-the underlying event or state was absent.
+AR0 separates producer-boundary capture fidelity from normalization coverage:
+
+```text
+capture_lossless_at_surface(run) :=
+    every_received_payload_retained_exactly
+    ∧ every_payload_has_stable_source_identity
+
+normalization_total_under_release(run, release) :=
+    every_source_record_normalized
+    ∨ explicitly_unhandled_with_reason
+```
+
+A normalizer or reconciliation failure does not retroactively make capture
+lossy. AR0 does not claim universal process observability: an expected but
+unreceived event is not evidence that the underlying event or state was absent.
 
 Raw app-server payload bytes are retained as private content-addressed
 artifacts. The SDK producer retains its complete public notification
@@ -26,6 +35,10 @@ terminal surfaces, observed terminal payloads, unresolved streams, timeout or
 termination policy, and closure classification. Closure is bounded observation
 closure, not a claim of global completeness.
 
+The closed `ClosureWitness`, canonicalization profile, and terminal mapping are
+defined by the accepted
+[runtime specification](../assurance-runtime-v0.md#7-producer-boundary-event-journal).
+
 Implement one project-owned pytest provider that emits normalized collection,
 setup/teardown, call, exit, timeout, signal, output, and capture-integrity
 facts. It does not classify qualification.
@@ -35,13 +48,21 @@ Implement one CPython state-lifetime provider using `weakref`,
 whether the scoped object remains alive after closure and what candidate
 container retains it. It does not derive claim status.
 
-Implement one `pytest-eval` `ai.judge` case over the repair rationale. The case
-checks that the repair identifies retained lifecycle state and grounds the
-proposed correction in both the hidden probe and CPython observation.
+Implement one deterministic rationale-grounding provider. It checks that the
+repair references the admitted hidden-probe and CPython-retention facts,
+identifies the lifecycle owner, targets the proposed fix at that owner, and
+introduces no unsupported fact references. This provider emits the hard
+`RationaleGroundingResult`.
 
-The evaluator runs in a trusted process after Codex execution. Provider, model,
-budget, and evaluator configuration are required by `EvaluationSpec`; evaluator
-credentials never enter a Codex workspace or process environment.
+Implement one advisory `pytest-eval` `ai.judge` case over the repair rationale.
+It assesses rationale quality but cannot satisfy a hard claim or directly
+affect promotion.
+
+The advisory evaluator runs in a trusted process after Codex execution.
+Provider, model, budget, and evaluator configuration are required by
+`EvaluationSpec`; evaluator credentials never enter a Codex workspace or
+process environment. A fresh inference is a new evaluation episode. Only an
+already recorded immutable observation can be replayed byte-for-byte.
 
 The admission service evaluates every proposed claim against:
 

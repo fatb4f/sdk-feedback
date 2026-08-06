@@ -26,9 +26,14 @@ It emits `PromotionAuthorization` only when every applicable hard claim is
 identities match, the event manifest is reconciled, and external effects comply
 with policy.
 
-It emits `QualifiedInconclusiveResult` for incomplete streams, identity
-mismatch, cross-fork evidence, unsupported observations, evaluator failure,
-manifest inconsistency, or exhausted repair budget.
+It emits `QualifiedInconclusiveResult` when missing required evidence produces
+`ClaimAdmission.UNKNOWN`, or for incomplete streams, unsupported observations,
+required deterministic provider failure, or exhausted repair budget.
+
+It emits `QualificationRejected` for invalid or mismatched identity,
+cross-subject or cross-fork evidence, malformed evidence, or manifest
+inconsistency. Advisory evaluator failure is retained as an unavailable
+advisory observation and does not change a hard claim or terminal result.
 
 `PromotionAuthorization` is bound to the exact rollout, target repository
 snapshot, environment, evidence manifest, evaluation specification, and policy.

@@ -1,5 +1,10 @@
 # Summary and authority
 
+- **Status:** Authoritative qualification baseline
+- **Accepted extension boundary:**
+  [ADR-0001](../adr/0001-app-server-qualification-and-runtime-boundaries.md)
+- **Documentation map:** [Authority and staging](../README.md)
+
 P0 proves one complete, isolated rollout-feedback episode:
 
 ```text
@@ -11,7 +16,11 @@ Codex lifecycle events
     ↓
 immutable append-only raw event log
     ↓
-typed pytest, CPython, and pytest-eval observations
+typed pytest and CPython observations
+    ↓
+deterministic rationale-grounding facts
+    ↓
+optional advisory semantic observations
     ↓
 claim-specific admission
     ↓
@@ -52,10 +61,11 @@ Qualification kernel
 claim or issue authorization.
 
 P0 uses one scoped-cache state-lifetime fixture, one CPython provider, one
-`pytest-eval` behavioral case, one planner/implementer trajectory, one repair
-turn, and one isolated fork. It includes a deterministic SDK-compatible driver
-for mandatory CI and a credential-gated live Codex episode using the same
-contracts.
+deterministic rationale-grounding provider, one advisory `pytest-eval`
+behavioral case, one planner/implementer trajectory, one repair turn, and one
+isolated fork. It includes a deterministic SDK-compatible driver for mandatory
+CI and a credential-gated live Codex episode using the same contracts. Fresh
+LLM judgments never satisfy a hard claim or directly authorize promotion.
 
 P0 does not include mutation testing, repeated-rollout statistics, adaptive
 `python-control`, broad provider registries, live steering, interruption,

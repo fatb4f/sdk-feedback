@@ -1,5 +1,13 @@
 # Coding-Agent Assurance Framework and Qualification Architecture
 
+- **Status:** Accepted architecture; implementation staged
+- **Decision record:**
+  [ADR-0001: App Server qualification and assurance-runtime boundaries](adr/0001-app-server-qualification-and-runtime-boundaries.md)
+- **Normative baseline:** [Qualification P0](qualification-p0-plan/00-summary-and-authority.md)
+- **Runtime specification:** [Diagnostics-Aligned Assurance Runtime v0](assurance-runtime-v0.md)
+- **Approval condition resolved:** Fresh LLM judgments are advisory and cannot
+  satisfy hard promotion claims.
+
 ## Executive conclusion
 
 **Review date:** 2026-08-06  
@@ -336,17 +344,19 @@ External artifacts define obligations, threats, methods, policies, executable ev
 
 ## 6. Project implementation constraints and ADR boundary
 
-The following technologies are selected project constraints. They do **not** follow deductively from the landscape comparison and should be governed by a separate architecture decision record.
+The following technologies are accepted project constraints under
+[ADR-0001](adr/0001-app-server-qualification-and-runtime-boundaries.md). They do
+**not** follow deductively from the landscape comparison.
 
 | Project decision | Current project status | Selection requirements | Survey limitation |
 |---|---|---|---|
-| CUE as structural contract authority | Selected project constraint | Closed structural constraints, unification, validation, projection, deterministic schema generation | This review did not compare CUE against Jsonnet, Nickel, Dhall, Rego, TypeSpec, Protobuf, or JSON-Schema-first designs |
-| Generated frozen Pydantic models | Selected Python transport | Typed Python adapters, validation, serialization, generated-model discipline | This review did not compare Pydantic with dataclasses, attrs, msgspec, or generated Protobuf classes |
-| pytest and Hypothesis | Selected inner qualification harness | Deterministic tests, fixtures, state-machine generation, shrinking, plugin integration | The landscape review treats these as implementation tools, not external assurance authorities |
-| CPython runtime adapters | Selected Python sensing layer | Low-overhead event capture, exception/call-path evidence, process isolation | Applicable only to Python execution; other runtimes require separate adapters |
-| `python-control` | Selected offline supervisory-analysis tool | Replay simulation, policy comparison, stability, saturation, and hysteresis analysis | It is not evidence authority, transition authority, or release authority |
+| CUE as structural contract authority | Accepted by ADR-0001 | Closed structural constraints, unification, validation, projection, deterministic schema generation | This review did not compare CUE against Jsonnet, Nickel, Dhall, Rego, TypeSpec, Protobuf, or JSON-Schema-first designs |
+| Generated frozen Pydantic models | Accepted by ADR-0001 | Typed Python adapters, validation, serialization, generated-model discipline | This review did not compare Pydantic with dataclasses, attrs, msgspec, or generated Protobuf classes |
+| pytest and Hypothesis | Accepted by ADR-0001 | Deterministic tests, fixtures, state-machine generation, shrinking, plugin integration | The landscape review treats these as implementation tools, not external assurance authorities |
+| CPython runtime adapters | Accepted by ADR-0001 | Low-overhead event capture, exception/call-path evidence, process isolation | Applicable only to Python execution; other runtimes require separate adapters |
+| `python-control` | Accepted for shadow analysis by ADR-0001 | Replay simulation, policy comparison, stability, saturation, and hysteresis analysis | It is not evidence authority, transition authority, or release authority |
 
-A dedicated ADR should record:
+ADR-0001 records:
 
 1. functional and nonfunctional requirements;
 2. evaluated alternatives;
@@ -359,7 +369,12 @@ The architecture below assumes these constraints while keeping their authority s
 
 ### P0 boundary and staged adoption
 
-The repository’s existing P0 remains the baseline qualification slice: an SDK-compatible driver, an append-only raw event log, the scoped CPython state-lifetime provider, one isolated fork, one bounded repair, and independent kernel authorization. The App Server adapter, broad runtime sensing, and `python-control` analysis described below are subsequent phases unless a new ADR explicitly supersedes that P0 plan.
+The repository’s existing P0 remains the baseline qualification slice: an
+SDK-compatible driver, an append-only raw event log, the scoped CPython
+state-lifetime provider, one isolated fork, one bounded repair, and independent
+kernel authorization. ADR-0001 accepts the App Server adapter, broad runtime
+sensing, and `python-control` shadow analysis as P1/AR1 work; it does not
+supersede P0.
 
 Use two interchangeable execution providers that emit the same typed lifecycle records:
 
@@ -929,11 +944,13 @@ Preserve in the restricted raw record (subject to capture-time scrubbing):
 - approval scope;
 - thread, turn, and item relationships;
 - diffs and file identities;
-
-The canonical projection retains only the policy-approved forms of these fields.
 - error classes;
 - terminal outcomes;
 - process exit state.
+
+The canonical projection retains only the policy-approved normalized or
+redacted forms of these fields and preserves lineage to every contributing raw
+source record.
 
 ### Fixtures
 
@@ -1914,10 +1931,9 @@ The package should expose adapters and typed projections while keeping admission
 
 ## 17. P1 App Server/runtime vertical slice
 
-The repository qualification lifecycle remains **P0**. This taxonomy and App
-Server/runtime slice is **taxonomy P0** within the semantic-derivation work and
-is implemented as **P1** in the repository-wide lifecycle plan; identifiers use
-the `taxonomy-p0` prefix to avoid conflating the two plans.
+The repository qualification lifecycle remains **P0**. The App Server/runtime
+slice is **P1** in the repository-wide lifecycle plan and uses the
+`appserver-p1` identifier prefix. It does not introduce a second P0 taxonomy.
 
 Implement one closed-loop episode:
 
@@ -2029,8 +2045,11 @@ sealed source journal
 
 ### 18.1 Source-specific JSONL journal
 
-The journal is the first durable boundary. It is lossless relative to the
-permitted capture policy, append-only, sequence-numbered, and content-addressed.
+The journal is the first durable boundary. Producer-boundary capture fidelity
+is evaluated separately from normalization coverage: capture retains every
+received payload and stable source identity; normalization converts every
+source record or marks it explicitly unhandled with a reason. The journal is
+append-only, sequence-numbered, and content-addressed.
 Capture-time scrubbing removes credentials, tokens, private paths, environment
 secrets, MCP parameters, and other prohibited values before ordinary storage.
 Exceptional sensitive records require separate encrypted, restricted storage,
@@ -2105,6 +2124,9 @@ versioned projection SQL digest. The ordinary analytical database contains only
 policy-approved canonical payloads; restricted raw records remain outside it.
 Rebuilding the projection is equivalent when canonical relations and digests
 match, independent of row order or DuckDB insertion order.
+
+Canonical facts retain a non-empty list of all contributing source-record IDs.
+Semantic deduplication never discards many-to-one provenance.
 
 Retain both lifecycle transitions and terminal objects:
 
@@ -2219,6 +2241,29 @@ export review artifacts. It must not mutate canonical records, issue authoritati
 verdicts, or become the persistent workflow engine. Exported workbooks include
 their source, dependency, projection, and bundle digests.
 
+Before AR1, both Xonsh and marimo must be generated adapters over one explicit
+application-service contract:
+
+```text
+Xonsh aliases ─┐
+               ├──► WorkbookApplicationService
+marimo controls┘
+
+WorkbookApplicationService
+├── application.status
+├── episode.open
+├── events.query
+├── obligation.inspect
+├── episode.replay
+├── replay.compare
+├── evaluation.run
+├── policy.compare
+└── artifact.export
+```
+
+This service boundary is deferred from AR0 but required before either operator
+surface is admitted in AR1.
+
 ### 18.6 `python-control` shadow analysis
 
 The first controller remains a deterministic discrete policy over admitted
@@ -2230,8 +2275,8 @@ they cannot bypass legal transitions, evidence sufficiency, or promotion rules.
 ### 18.7 Diagnostics vertical slice
 
 The repository qualification lifecycle remains P0. This diagnostics slice is
-`diagnostics-p0` within the subsystem and P1 in the repository-wide lifecycle
-plan.
+P1 in the repository-wide lifecycle plan and uses the `diagnostics-p1`
+identifier prefix.
 
 ```text
 capture one Codex JSONL/App Server episode
@@ -2302,7 +2347,7 @@ CPython can supply:
 
 None of these components specifies the complete evidence calculus required to promote an agent-generated patch.
 
-Under the project’s separate architecture decision, the CUE qualification profile remains the selected canonical authority for:
+Under ADR-0001, the CUE qualification profile remains the selected canonical authority for:
 
 ```text
 repository identity

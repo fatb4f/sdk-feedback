@@ -7,12 +7,14 @@ Tests must cover:
 - Truncated event streams, missing terminal events, sequence gaps, provider failure, inconsistent snapshots, and incomplete-manifest sealing.
 - Pytest and CPython provider success, retained-object detection, released-object detection, capture integrity, and normalized provenance.
 - Admission tables for identity, freshness, applicability, rejected observations, and `UNKNOWN` propagation.
+- Terminal mapping from missing evidence to `UNKNOWN`/inconclusive and from invalid identity or malformed evidence to rejection.
 - Controller rules, one-repair budget exhaustion, and proof that controller features cannot enter qualification inputs.
 - Fork isolation across workspace, repository snapshot, environment/cache, process, and evidence namespace.
 - Rejection of parent evidence for a repaired fork until the relevant probes are re-run.
 - Kernel rejection when Codex reports success but hard claims remain unsatisfied.
 - Kernel rejection when any non-kernel component attempts to create `AUTHORIZED`.
-- One deterministic scripted end-to-end episode and one credential-gated live Codex plus live `pytest-eval` episode.
+- One deterministic scripted end-to-end episode and one credential-gated live Codex episode with an advisory live `pytest-eval` observation.
+- Proof that advisory semantic observations and advisory evaluator failures cannot alter hard claims or promotion.
 
 Run repository gates in this order:
 

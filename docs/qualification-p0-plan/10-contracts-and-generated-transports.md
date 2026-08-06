@@ -10,6 +10,7 @@ LifecycleEvent
 ToolInvocationObservation
 PytestObservation
 CPythonObservation
+RationaleGroundingResult
 LLMBehaviorObservation
 ClaimAdmission
 ControlState
@@ -22,6 +23,7 @@ EvidenceManifest
 QualificationVerdict
 PromotionAuthorization
 QualifiedInconclusiveResult
+QualificationRejected
 ```
 
 Every record carries the qualification schema identifier. `RolloutIdentity`
@@ -48,10 +50,11 @@ generator_version
 admission_service_version
 ```
 
-Digests are domain-tagged SHA-256 values over canonical JSON or canonical
-repository entries. Repository snapshots include normalized paths, bytes, and
-executable modes while excluding VCS metadata, virtual environments, caches,
-evidence logs, and runtime artifacts.
+Digests are domain-tagged SHA-256 values over JSON encoded under the accepted
+`canonicalization-profile/v0` or over canonical repository entries. Repository
+snapshots include normalized paths, bytes, and executable modes while excluding
+VCS metadata, virtual environments, caches, evidence logs, and runtime
+artifacts.
 
 `ClaimAdmission` is the only source of claim status:
 
@@ -73,14 +76,35 @@ Use these obligation classes in P0:
 
 ```text
 HARD_EXECUTABLE
-    deterministic pytest behavior and object-release semantics
+    hidden probe outcome
+    CPython retention observation
+    regression tests
+    deterministic rationale-grounding predicates
 
-HARD_SEMANTIC
-    the single rollout-behavior evaluation
+ADVISORY_SEMANTIC
+    LLM assessment of rationale quality
 
 ADVISORY_DIAGNOSTIC
     additional CPython retention details
 ```
+
+The deterministic grounding result is a closed contract:
+
+```cue
+#RationaleGroundingResult: close({
+    references_hidden_probe:       true
+    references_retention_fact:     true
+    identifies_lifecycle_owner:    true
+    proposed_fix_targets_owner:    true
+    unsupported_fact_references:   []
+})
+```
+
+The hard predicate verifies references to admitted facts; it does not score
+prose quality. An `LLMBehaviorObservation` is advisory and cannot satisfy a hard
+claim. A recorded judgment can be replayed deterministically as an immutable
+observation. Re-running the judge creates a new evaluation episode with a new
+identity.
 
 Generated Pydantic models are frozen and reject extra fields. Providers cannot
 author admissions, claims, residuals, controller state, transitions, or

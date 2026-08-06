@@ -1,24 +1,35 @@
 # Diagnostics-Aligned Assurance Runtime v0
 
+- **Status:** Accepted successor specification under
+  [ADR-0001](adr/0001-app-server-qualification-and-runtime-boundaries.md)
+- **Normative baseline:**
+  [Qualification P0](qualification-p0-plan/00-summary-and-authority.md)
+- **Documentation map:** [Authority and staging](README.md)
+
 > Repository publication note: this document is the versioned runtime successor for the
 > qualification architecture. It preserves the existing `workflow-snapshot/v0` contract and
 > introduces `assurance-runtime-release/v0` as a separate composite release boundary. The
 > existing qualification P0 remains authoritative and is not replaced by this document.
 
-
 ## 1. Canonical formulation
 
 > The system is a diagnostics-aligned assurance runtime governed by immutable CUE-authored workflow and ontology releases. It records every received producer-boundary event in an append-only journal, normalizes those records into typed facts, executes admitted diagnostic workflows through a deterministic controller, and produces independently adjudicated qualification verdicts.
 
-AR0 makes a bounded observation claim. For a pinned producer surface, release and policy:
+AR0 makes separate bounded claims for capture fidelity and normalization coverage:
 
 ```text
-surface_lossless(run, release, policy) :=
+capture_lossless_at_surface(run) :=
     every_received_payload_retained_exactly
     ∧ every_payload_has_stable_source_identity
-    ∧ every_payload_is_deterministically_normalized
-    ∧ every_payload_is_reconciled_or_explicitly_unhandled
+
+normalization_total_under_release(run, release) :=
+    every_source_record_normalized
+    ∨ explicitly_unhandled_with_reason
 ```
+
+A failure in normalization or reconciliation does not retroactively make
+producer-boundary capture lossy. Qualification requires both predicates plus
+policy-relative closure and evidence reconciliation.
 
 An event that was expected but not received is not evidence that the underlying event or
 state was absent. Missing required events produce an incomplete or unknown observation.
@@ -129,18 +140,38 @@ providerVersions
 interpreterProfileDigest
 capabilitySetDigest
 journalHeadDigest
-```
-
-The runtime release also pins canonical-output semantics:
-
-```text
+canonicalizationProfileDigest
 normalizationImplementationDigest
-canonicalSerializationVersion
-fieldOrderingRules
-numberEncodingRules
-timestampNormalizationRules
-unicodeNormalizationRules
 ```
+
+Canonical output is governed by one immutable profile:
+
+```cue
+#CanonicalizationProfile: close({
+    schema: "canonicalization-profile/v0"
+
+    object_key_order: "unicode-codepoint"
+    duplicate_keys:   "reject"
+
+    strings: {
+        unicode_normalization: "NFC"
+    }
+
+    numbers: {
+        non_finite:    "reject"
+        integers:      "safe-integer"
+        negative_zero: "normalize-to-zero"
+    }
+
+    optional_fields: "omit-when-absent"
+    explicit_nulls:  "preserve"
+    timestamps:      "utc-rfc3339-nanoseconds"
+})
+```
+
+The runtime release pins `canonicalizationProfileDigest` and
+`normalizationImplementationDigest`. The profile defines canonical bytes; the
+implementation digest identifies the normalizer that realized it.
 
 Replay compares canonical bytes produced under these bindings, not merely equivalent in-memory
 Pydantic objects. Canonical encoders must define deterministic ordering and representation for
@@ -177,6 +208,8 @@ class AssuranceRuntimeRelease(BaseModel):
     evaluation_policy_digest: str
     development_graph_digest: str
     capability_set_digest: str
+    canonicalization_profile_digest: str
+    normalization_implementation_digest: str
     generated_manifest_digest: str
 
     provider_requirements: tuple[str, ...]
@@ -303,7 +336,7 @@ development unit satisfied
 realization qualified
 ```
 
-## 7. Lossless event journal
+## 7. Producer-boundary event journal
 
 Runtime events are first retained in an append-only journal.
 
@@ -355,8 +388,10 @@ decodedPayload?
 correlationIds
 ```
 
-Source records are never deduplicated. Only their canonical evidentiary projections may
-deduplicate, and only when their source identities and semantic content reconcile.
+Source records are never deduplicated. Only their canonical evidentiary
+projections may deduplicate, and only when their source identities and semantic
+content reconcile. A deduplicated fact retains every contributing source record
+rather than selecting one representative.
 
 The collector retains:
 
@@ -389,23 +424,60 @@ Evidence derivation normally uses the reconciled terminal object. Intermediate e
 A session-end event does not seal the journal. Sealing belongs to an external collector after
 terminal-event reconciliation. Crash recovery may explicitly mark unresolved started objects.
 
-Closure is policy-relative rather than global. A `ClosureWitness` records the run identity,
-expected terminal surfaces, observed terminal payloads, unresolved streams, timeout or
-termination policy, and the resulting closure classification. A run is qualifiable only when
-the configured observation interval has a valid closure witness and all required events are
-reconciled; otherwise the result is `UNKNOWN` or `INCONCLUSIVE`.
+Closure is policy-relative rather than global. Expectations come from the
+pinned observation policy, not from the producer:
+
+```cue
+#ClosureClassification:
+    "OPEN" |
+    "CLOSED_COMPLETE" |
+    "CLOSED_INCOMPLETE" |
+    "ABORTED"
+
+#ClosureWitness: close({
+    run_id:                #ID
+    observation_policy:   #Digest
+    interval_start_record: #SourceRecordID
+    interval_end_record?:  #SourceRecordID
+
+    expected_surfaces:  [...#ExpectedTerminalSurface]
+    observed_terminals: [...#SourceRecordID]
+    unresolved_streams: [...#StreamID]
+
+    termination:    #TerminationObservation
+    classification: #ClosureClassification
+})
+```
+
+A run is qualifiable only when the configured observation interval has a valid
+`CLOSED_COMPLETE` witness and all required evidence is reconciled.
 
 The qualification gate is policy-relative:
 
 ```text
 qualifiable(run) :=
-    closure_witness_exists
-    ∧ journal_complete_under_policy
-    ∧ all_required_events_reconciled
+    capture_lossless_at_surface(run)
+    ∧ normalization_total_under_release(run, release)
+    ∧ closure_complete_under_policy(run, policy)
+    ∧ required_evidence_reconciled
     ∧ all_evidence_checkpoint_bound
     ∧ no_unresolved_identity_conflicts
-    ∧ normalization_release_pinned
+    ∧ canonicalization_profile_pinned
+    ∧ normalization_implementation_pinned
     ∧ evaluation_policy_pinned
+```
+
+Terminal mapping is explicit:
+
+```text
+claim missing required evidence
+    → ClaimAdmission.UNKNOWN
+
+required claim UNKNOWN
+    → obligation INCONCLUSIVE
+
+invalid identity or malformed evidence
+    → qualification REJECTED
 ```
 
 ---
@@ -431,10 +503,18 @@ lifecycle_anomalies
 event_correlations
 ```
 
-Each normalized fact retains:
+Each normalized fact is closed over non-empty, many-to-one provenance:
+
+```cue
+#CanonicalFact: close({
+    fact_digest:       #Digest
+    source_record_ids: [...#SourceRecordID] & [_, ...]
+})
+```
+
+It also retains:
 
 ```text
-source record identity
 provider identity and version
 subject snapshot
 episode identity
@@ -541,7 +621,10 @@ control.rank_probe
 control.compare_policies
 ```
 
-The same function is callable through the SDK, app-server, graph, Xonsh, marimo, pytest evaluations and replay infrastructure.
+The same function is callable through the SDK, app-server, graph, pytest
+evaluations, and replay infrastructure. In AR1, Xonsh and marimo call these
+functions through the shared `WorkbookApplicationService` rather than acquiring
+independent application semantics.
 
 ---
 
@@ -795,17 +878,37 @@ MaterializeSubject
 
 Its execution edges are not ontology edges.
 
-Continuation ownership is an episode invariant. AR0 uses:
+Continuation ownership is an episode invariant. AR0 uses the project-level
+mode:
 
 ```text
 continuationOwner = deterministic-controller
-goalMode = disabled
+delegationState = inactive
 ```
 
-The controller owns the observe, reconcile, guard, authorize and explicit-command loop. An
-active app-server Goal must not independently schedule continuation turns in the same episode.
+These are project terms, not assumed App Server wire fields. Their meaning must
+be bound to a pinned protocol capability and observation profile. The ownership
+witness retains:
 
-A later Goal-mode integration is a bounded delegated interval, not a second controller:
+```cue
+#ContinuationOwnershipObservation: close({
+    episode_id:                #ID
+    continuation_owner:        "deterministic-controller" | "delegated"
+    protocol_capability_digest: #Digest
+    configuration_or_request:  #SourceRecordID
+    controller_commands:       [...#SourceRecordID]
+    active_delegations:        [...#DelegationID]
+})
+```
+
+The controller owns the observe, reconcile, guard, authorize and
+explicit-command loop. Qualification requires configuration or request evidence
+that delegation is inactive, active-delegation detection, and controller
+command identity. [OpenAI's “Follow a goal” use-case language](https://developers.openai.com/codex/use-cases)
+does not by itself establish a stable App Server field named `goalMode`; any
+mapping must be pinned to the generated protocol contract.
+
+A later goal-following integration is a bounded delegated interval, not a second controller:
 
 ```text
 ControllerDelegation:
@@ -818,8 +921,10 @@ ControllerDelegation:
     terminal checkpoint
 ```
 
-Delegation transfers continuation ownership for the interval. Reclaim requires a reconciled
-terminal or suspension state before the controller resumes issuing continuation commands.
+Delegation start, terminal, and ownership-reclaim events are retained as
+protocol evidence. Delegation transfers continuation ownership for the interval.
+Reclaim requires a reconciled terminal or suspension state before the controller
+resumes issuing continuation commands.
 
 The controller receives state and admitted observations, then produces deterministic transition decisions:
 
@@ -923,6 +1028,34 @@ issue authoritative verdicts directly
 hide runtime dependencies
 become the persistent episode controller
 ```
+
+Before AR1, define one application-service boundary shared by both operator
+surfaces:
+
+```text
+WorkbookApplicationService
+├── application.status
+├── episode.open
+├── events.query
+├── obligation.inspect
+├── episode.replay
+├── replay.compare
+├── evaluation.run
+├── policy.compare
+└── artifact.export
+```
+
+Xonsh aliases and marimo controls are generated adapters over that service:
+
+```text
+Xonsh aliases ─┐
+               ├──► WorkbookApplicationService
+marimo controls┘
+```
+
+The service returns generated transports and uses the existing capability
+registry, collector, and authority checks. This is an AR1 prerequisite, not an
+AR0 deliverable.
 
 ---
 
@@ -1131,7 +1264,7 @@ proof. This successor slice adds diagnostic evidence and does not replace that e
 11. Evaluate the import-resolution obligation set in the pure kernel.
 12. Produce satisfied, inconclusive or rejected diagnostic status.
 13. Verify deterministic journal replay and projection independence.
-14. Verify that Goal mode is disabled and the deterministic controller is the sole continuation owner.
+14. Validate the pinned continuation-ownership observation and prove that no delegation is active.
 15. Produce and validate a policy-relative closure witness.
 ```
 
@@ -1184,7 +1317,7 @@ Xonsh aliases, graph commands, OpenAPI output, DuckDB, OTel and marimo are later
 | Regression retention | Earlier satisfied units remain active after later mutations |
 | Unsupported-claim safety | Insufficient causal evidence produces `unsupported` or `inconclusive` |
 | Unknown preservation | Missing observations never become claims of subject-state absence |
-| Continuation ownership | No active app-server Goal schedules turns in graph-owned AR0 episodes |
+| Continuation ownership | Pinned protocol evidence shows controller ownership and no active delegation in AR0 |
 | Controller shadowing | Optimized recommendations never directly actuate the runtime |
 
 ---
@@ -1219,6 +1352,7 @@ explicit and non-gating.
 
 ```text
 pydantic-graph controller
+WorkbookApplicationService
 Xonsh operator/diagnostic adapter
 DuckDB projection
 OpenTelemetry correlation
@@ -1254,7 +1388,7 @@ CUE-authored semantic authority
 → immutable workflow snapshot
 → generated typed capabilities
 → authorized deterministic execution
-→ lossless evidence journal
+→ producer-boundary evidence journal
 → canonical fact normalization
 → independent qualification
 → replaceable analytical and operator projections

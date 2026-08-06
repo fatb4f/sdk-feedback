@@ -15,13 +15,15 @@ The planner turn uses a read-only sandbox with denied escalation. The initial
 implementer and repair turns use workspace-write sandboxing, disabled network,
 an allowlisted environment, and no promotion or evaluator credentials.
 
-P0 sets `continuationOwner = deterministic-controller` and disables app-server
-Goal mode. The controller alone observes, reconciles, evaluates guards,
-authorizes transitions, and issues explicit continuation commands. A later
-Goal-mode integration must be a bounded delegation with an authorized
+P0 sets `continuationOwner = deterministic-controller` and
+`delegationState = inactive`. These are project terms whose values must be
+proven by the pinned protocol capability and continuation-ownership observation,
+not presumed App Server fields. The controller alone observes, reconciles,
+evaluates guards, authorizes transitions, and issues explicit continuation
+commands. A later integration must be a bounded delegation with an authorized
 objective, operation and resource bounds, mandatory observation surfaces,
-reclaim conditions, and a reconciled terminal checkpoint before controller
-ownership resumes.
+start and terminal records, reclaim conditions, and a reconciled terminal
+checkpoint before controller ownership resumes.
 
 P0 implements only these actions:
 
@@ -35,8 +37,11 @@ terminate inconclusive
 The controller uses deterministic rules:
 
 ```text
-incomplete identity, capture, or reconciliation
+missing required observation, incomplete capture, or incomplete closure
     → QualifiedInconclusiveResult
+
+invalid identity, cross-subject evidence, or malformed evidence
+    → QualificationRejected
 
 hidden liveness violation with applicable CPython evidence
     → isolated fork + RepairDirective
