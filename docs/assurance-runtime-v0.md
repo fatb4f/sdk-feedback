@@ -8,7 +8,20 @@
 
 ## 1. Canonical formulation
 
-> The system is a diagnostics-aligned assurance runtime governed by immutable CUE-authored workflow and ontology releases. It records agent and probe activity in a lossless append-only journal, normalizes those records into typed facts, executes admitted diagnostic workflows through a deterministic controller, and produces independently adjudicated qualification verdicts.
+> The system is a diagnostics-aligned assurance runtime governed by immutable CUE-authored workflow and ontology releases. It records every received producer-boundary event in an append-only journal, normalizes those records into typed facts, executes admitted diagnostic workflows through a deterministic controller, and produces independently adjudicated qualification verdicts.
+
+AR0 makes a bounded observation claim. For a pinned producer surface, release and policy:
+
+```text
+surface_lossless(run, release, policy) :=
+    every_received_payload_retained_exactly
+    ∧ every_payload_has_stable_source_identity
+    ∧ every_payload_is_deterministically_normalized
+    ∧ every_payload_is_reconciled_or_explicitly_unhandled
+```
+
+An event that was expected but not received is not evidence that the underlying event or
+state was absent. Missing required events produce an incomplete or unknown observation.
 
 The runtime may expose generated interfaces through Xonsh, the Codex app-server, SDK clients, marimo, or other adapters. These interfaces are projections over the same pinned workflow snapshot. They do not independently define obligations, evidence sufficiency, legal transitions, or verdict semantics.
 
@@ -118,6 +131,21 @@ capabilitySetDigest
 journalHeadDigest
 ```
 
+The runtime release also pins canonical-output semantics:
+
+```text
+normalizationImplementationDigest
+canonicalSerializationVersion
+fieldOrderingRules
+numberEncodingRules
+timestampNormalizationRules
+unicodeNormalizationRules
+```
+
+Replay compares canonical bytes produced under these bindings, not merely equivalent in-memory
+Pydantic objects. Canonical encoders must define deterministic ordering and representation for
+every serialized value.
+
 Published workflow, ontology and policy releases are immutable.
 
 A later release must not silently reinterpret an earlier verdict. Re-evaluation requires an explicit requalification episode with its own identity and decision record.
@@ -162,6 +190,17 @@ loaded runtime fails closed before execution.
 Static development units and prerequisite edges belong to the referenced development-graph
 artifact. Their runtime status is a derived projection and never appears in the immutable
 workflow snapshot or release payload.
+
+Graph authority is explicit. The runtime distinguishes:
+
+```cue
+#GraphKind: "development-obligation" | "runtime-controller" | "ontology"
+```
+
+Development prerequisite edges, runtime transition edges and ontology relations have separate
+closed vocabularies. A relation derived across graph kinds requires a named derivation rule and
+supporting evidence; execution edges do not become ontology relations merely because they were
+observed.
 
 The generation pipeline is:
 
@@ -295,10 +334,29 @@ Runtime events are first retained in an append-only journal.
 }
 ```
 
-The collector retains every received public event at its producer boundary. Exact App Server
-payload bytes are stored as private content-addressed artifacts; the Python SDK producer stores
-the complete public notification representation together with its SDK and runtime versions.
-The record digest excludes its own digest field.
+The collector retains every received public event at its producer boundary. Exact raw app-server
+payload bytes are stored as private content-addressed artifacts. The Python SDK producer stores
+the complete public notification representation together with its SDK and runtime versions; it
+does not claim to recover wire details that the SDK does not expose. The record digest excludes
+its own digest field.
+
+The parsed JSON view is not the exact payload. A provider envelope therefore carries both an
+exact payload artifact and an optional decoded view:
+
+```text
+sourceRecordId
+provider
+providerVersion
+connectionId
+receivedSequence
+payloadArtifactDigest
+payloadMediaType
+decodedPayload?
+correlationIds
+```
+
+Source records are never deduplicated. Only their canonical evidentiary projections may
+deduplicate, and only when their source identities and semantic content reconcile.
 
 The collector retains:
 
@@ -328,7 +386,27 @@ item/completed
 
 Evidence derivation normally uses the reconciled terminal object. Intermediate events remain available for timing, lifecycle analysis and controller debugging.
 
-A session-end event does not seal the journal. Sealing belongs to an external collector after terminal-event reconciliation. Crash recovery may explicitly mark unresolved started objects.
+A session-end event does not seal the journal. Sealing belongs to an external collector after
+terminal-event reconciliation. Crash recovery may explicitly mark unresolved started objects.
+
+Closure is policy-relative rather than global. A `ClosureWitness` records the run identity,
+expected terminal surfaces, observed terminal payloads, unresolved streams, timeout or
+termination policy, and the resulting closure classification. A run is qualifiable only when
+the configured observation interval has a valid closure witness and all required events are
+reconciled; otherwise the result is `UNKNOWN` or `INCONCLUSIVE`.
+
+The qualification gate is policy-relative:
+
+```text
+qualifiable(run) :=
+    closure_witness_exists
+    ∧ journal_complete_under_policy
+    ∧ all_required_events_reconciled
+    ∧ all_evidence_checkpoint_bound
+    ∧ no_unresolved_identity_conflicts
+    ∧ normalization_release_pinned
+    ∧ evaluation_policy_pinned
+```
 
 ---
 
@@ -364,6 +442,20 @@ normalizer version
 raw payload digest
 canonical fact digest
 ```
+
+SDK and raw app-server adapters are observationally equivalent only within a pinned projection
+profile:
+
+```text
+sdk_event ≈ protocol_event
+    iff canonical identities agree
+    ∧ canonical semantics agree
+    ∧ all policy-required fields are covered
+```
+
+Transport-specific fields remain in their provider envelopes. Identity conflicts, semantic
+conflicts, provider omissions and unreconciled records become explicit discrepancy facts and
+are not silently discarded.
 
 DuckDB relations are rebuildable from the journal. Deleting the DuckDB database must not change qualification outcomes.
 
@@ -703,6 +795,32 @@ MaterializeSubject
 
 Its execution edges are not ontology edges.
 
+Continuation ownership is an episode invariant. AR0 uses:
+
+```text
+continuationOwner = deterministic-controller
+goalMode = disabled
+```
+
+The controller owns the observe, reconcile, guard, authorize and explicit-command loop. An
+active app-server Goal must not independently schedule continuation turns in the same episode.
+
+A later Goal-mode integration is a bounded delegated interval, not a second controller:
+
+```text
+ControllerDelegation:
+    starting checkpoint
+    authorized objective
+    allowed operations
+    token/time/turn bounds
+    mandatory observation surfaces
+    reclaim conditions
+    terminal checkpoint
+```
+
+Delegation transfers continuation ownership for the interval. Reclaim requires a reconciled
+terminal or suspension state before the controller resumes issuing continuation commands.
+
 The controller receives state and admitted observations, then produces deterministic transition decisions:
 
 ```python
@@ -1013,6 +1131,8 @@ proof. This successor slice adds diagnostic evidence and does not replace that e
 11. Evaluate the import-resolution obligation set in the pure kernel.
 12. Produce satisfied, inconclusive or rejected diagnostic status.
 13. Verify deterministic journal replay and projection independence.
+14. Verify that Goal mode is disabled and the deterministic controller is the sole continuation owner.
+15. Produce and validate a policy-relative closure witness.
 ```
 
 ### Initial capability set
@@ -1047,8 +1167,11 @@ Xonsh aliases, graph commands, OpenAPI output, DuckDB, OTel and marimo are later
 |---|---|
 | Journal integrity | Every record has valid sequence and digest linkage |
 | Journal replay | The same sealed journal produces the same canonical facts |
-| Adapter equivalence | SDK and app-server representations normalize equivalently |
+| Canonical serialization | Replay emits byte-identical normalized output under the pinned encoding rules |
+| Adapter equivalence | SDK and app-server representations normalize equivalently for all policy-required fields |
+| Producer-boundary retention | Exact raw app-server payloads and complete SDK public representations are retained |
 | Lifecycle closure | Every started object is terminal or explicitly unresolved |
+| Closure witness | The configured observation interval has a valid policy-relative closure record |
 | Subject identity | All evidence binds to the requested repository snapshot |
 | Interpreter identity | Probe evidence binds to the requested executable and environment |
 | Bootstrap visibility | Every injected helper is declared, versioned and digested |
@@ -1060,6 +1183,8 @@ Xonsh aliases, graph commands, OpenAPI output, DuckDB, OTel and marimo are later
 | Verdict independence | Removing DuckDB, OTel or marimo does not change the verdict |
 | Regression retention | Earlier satisfied units remain active after later mutations |
 | Unsupported-claim safety | Insufficient causal evidence produces `unsupported` or `inconclusive` |
+| Unknown preservation | Missing observations never become claims of subject-state absence |
+| Continuation ownership | No active app-server Goal schedules turns in graph-owned AR0 episodes |
 | Controller shadowing | Optimized recommendations never directly actuate the runtime |
 
 ---

@@ -4,10 +4,27 @@ Store rollout evidence outside every Codex-writable workspace. Append each
 Codex SDK method result and streamed notification to a rollout-scoped JSONL
 event log. Existing records are never rewritten.
 
+AR0 proves producer-boundary-lossless capture over the pinned app-server and
+Python SDK observation surfaces. It retains every received payload exactly,
+assigns stable source identity, normalizes deterministically, and reconciles
+each payload or marks it explicitly unhandled. It does not claim universal
+process observability: an expected but unreceived event is not evidence that
+the underlying event or state was absent.
+
+Raw app-server payload bytes are retained as private content-addressed
+artifacts. The SDK producer retains its complete public notification
+representation together with SDK and runtime versions; it does not claim
+wire-level details unavailable through the SDK.
+
 Terminal-event reconciliation checks turn and item pairing, sequence
 continuity, SDK errors, provider completion, repository snapshots, and external
 effect records. A stream may be sealed while incomplete; affected claims remain
 `UNKNOWN`.
+
+Sealing requires a policy-relative closure witness identifying the expected
+terminal surfaces, observed terminal payloads, unresolved streams, timeout or
+termination policy, and closure classification. Closure is bounded observation
+closure, not a claim of global completeness.
 
 Implement one project-owned pytest provider that emits normalized collection,
 setup/teardown, call, exit, timeout, signal, output, and capture-integrity
