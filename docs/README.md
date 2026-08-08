@@ -9,6 +9,7 @@ implementation work.
 | [ADR-0001](adr/0001-app-server-qualification-and-runtime-boundaries.md) | Accepted | Records the App Server and assurance-runtime architecture decision and staging |
 | [Assurance Runtime v0](assurance-runtime-v0.md) | Accepted successor specification | Defines AR0 evidence-core contracts without replacing Qualification P0 |
 | [Architecture landscape](coding-agent-assurance-framework-landscape.md) | Accepted supporting analysis | Records the ecosystem survey, rationale, and executable architecture |
+| [Reference lineage](reference-lineage.md) | Supporting research; non-normative | Records external standards, research, and implementation lineage without defining contracts or staging |
 
 Authority order:
 
