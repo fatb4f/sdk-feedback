@@ -51,8 +51,10 @@ container retains it. It does not derive claim status.
 Implement one deterministic rationale-grounding provider. It checks that the
 repair references the admitted hidden-probe and CPython-retention facts,
 identifies the lifecycle owner, targets the proposed fix at that owner, and
-introduces no unsupported fact references. This provider emits the hard
-`RationaleGroundingResult`.
+introduces no unsupported fact references. This provider emits a neutral
+`RationaleGroundingObservation` containing the individual predicate values and
+their fact and provider provenance. It does not emit claim status or an
+already-satisfied witness.
 
 Implement one advisory `pytest-eval` `ai.judge` case over the repair rationale.
 It assesses rationale quality but cannot satisfy a hard claim or directly
@@ -76,6 +78,13 @@ capture integrity
 freshness and applicability
 CUE constraints
 ```
+
+For rationale grounding, admission unifies each structurally valid observation
+with `SatisfiedRationaleGrounding`: a match is `SATISFIED`, a valid non-match is
+`VIOLATED`, and no usable observation is `UNKNOWN`. A malformed grounding
+candidate is rejected as an observation and leaves the claim `UNKNOWN` when no
+valid replacement exists; it does not by itself make the sealed qualification
+manifest malformed.
 
 There is no universal confidence scalar. Controller features derived from
 admissions are not evidence and cannot be reused as qualification claims.

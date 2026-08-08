@@ -10,7 +10,7 @@ LifecycleEvent
 ToolInvocationObservation
 PytestObservation
 CPythonObservation
-RationaleGroundingResult
+RationaleGroundingObservation
 LLMBehaviorObservation
 ClaimAdmission
 ControlState
@@ -88,17 +88,40 @@ ADVISORY_DIAGNOSTIC
     additional CPython retention details
 ```
 
-The deterministic grounding result is a closed contract:
+The deterministic grounding provider emits a neutral closed observation:
 
 ```cue
-#RationaleGroundingResult: close({
-    references_hidden_probe:       true
-    references_retention_fact:     true
-    identifies_lifecycle_owner:    true
-    proposed_fix_targets_owner:    true
-    unsupported_fact_references:   []
+#RationaleGroundingObservation: close({
+    references_hidden_probe:     bool
+    references_retention_fact:   bool
+    identifies_lifecycle_owner:  bool
+    proposed_fix_targets_owner:  bool
+
+    unsupported_fact_references: [...#FactID]
+
+    rationale_artifact_digest: #Digest
+    admitted_fact_ids:         [...#FactID]
+    provider_id:               #ProviderID
+    provider_version:          #Version
 })
+
+#SatisfiedRationaleGrounding:
+    #RationaleGroundingObservation & {
+        references_hidden_probe:     true
+        references_retention_fact:   true
+        identifies_lifecycle_owner:  true
+        proposed_fix_targets_owner:  true
+        unsupported_fact_references: []
+    }
 ```
+
+The admission service, not the provider, unifies the observation with
+`SatisfiedRationaleGrounding`. Successful unification produces `SATISFIED`. A
+structurally valid observation that does not unify because any predicate is
+false or `unsupported_fact_references` is non-empty produces `VIOLATED`.
+Missing or unavailable observations, provider failure, and structurally invalid
+grounding candidates with no valid replacement produce `UNKNOWN`; invalid
+candidates are retained in `rejected_observation_ids`.
 
 The hard predicate verifies references to admitted facts; it does not score
 prose quality. An `LLMBehaviorObservation` is advisory and cannot satisfy a hard

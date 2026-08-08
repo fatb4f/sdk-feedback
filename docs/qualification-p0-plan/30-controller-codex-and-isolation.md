@@ -40,7 +40,7 @@ The controller uses deterministic rules:
 missing required observation, incomplete capture, or incomplete closure
     → QualifiedInconclusiveResult
 
-invalid identity, cross-subject evidence, or malformed evidence
+invalid identity, cross-subject evidence, or malformed envelope or sealed manifest
     → QualificationRejected
 
 hidden liveness violation with applicable CPython evidence

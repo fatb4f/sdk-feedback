@@ -150,17 +150,24 @@ Canonical output is governed by one immutable profile:
 #CanonicalizationProfile: close({
     schema: "canonicalization-profile/v0"
 
-    object_key_order: "unicode-codepoint"
-    duplicate_keys:   "reject"
+    object_keys: {
+        unicode_normalization:     "NFC"
+        order_after_normalization: "unicode-codepoint"
+        duplicate_keys:            "reject"
+        normalized_key_collisions: "reject"
+    }
 
     strings: {
         unicode_normalization: "NFC"
     }
 
     numbers: {
-        non_finite:    "reject"
-        integers:      "safe-integer"
-        negative_zero: "normalize-to-zero"
+        non_finite:            "reject"
+        integers:              "safe-integer"
+        finite_non_integral:    "reject"
+        fraction_notation:      "reject"
+        exponent_notation:      "reject"
+        negative_zero:          "normalize-to-zero"
     }
 
     optional_fields: "omit-when-absent"
@@ -172,6 +179,13 @@ Canonical output is governed by one immutable profile:
 The runtime release pins `canonicalizationProfileDigest` and
 `normalizationImplementationDigest`. The profile defines canonical bytes; the
 implementation digest identifies the normalizer that realized it.
+
+Object keys are NFC-normalized before sorting. Inputs are rejected when two
+distinct source keys normalize to the same key, so normalization cannot
+silently collapse an object member. AR0 accepts only safe integers written in
+base-10 integer notation. Fraction or exponent notation is rejected, including
+forms such as `1.5`, `1.50`, `1e3`, and `0.001e6`, even when the represented
+numeric value is mathematically integral.
 
 Replay compares canonical bytes produced under these bindings, not merely equivalent in-memory
 Pydantic objects. Canonical encoders must define deterministic ordering and representation for
@@ -473,10 +487,16 @@ Terminal mapping is explicit:
 claim missing required evidence
     → ClaimAdmission.UNKNOWN
 
+grounding observation absent, unavailable, or rejected as malformed
+    → ClaimAdmission.UNKNOWN
+
+valid grounding observation fails its satisfied predicate
+    → ClaimAdmission.VIOLATED
+
 required claim UNKNOWN
     → obligation INCONCLUSIVE
 
-invalid identity or malformed evidence
+invalid identity or malformed envelope or sealed manifest
     → qualification REJECTED
 ```
 

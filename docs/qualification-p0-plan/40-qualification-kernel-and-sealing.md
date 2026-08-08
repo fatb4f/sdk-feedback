@@ -27,12 +27,18 @@ identities match, the event manifest is reconciled, and external effects comply
 with policy.
 
 It emits `QualifiedInconclusiveResult` when missing required evidence produces
-`ClaimAdmission.UNKNOWN`, or for incomplete streams, unsupported observations,
-required deterministic provider failure, or exhausted repair budget.
+`ClaimAdmission.UNKNOWN`, including when a grounding observation is absent,
+unavailable, or rejected as structurally invalid with no valid replacement; it
+also does so for incomplete streams, unsupported observations, required
+deterministic provider failure, or exhausted repair budget. A valid grounding
+observation that fails its satisfied predicate is instead an admitted
+`VIOLATED` claim.
 
 It emits `QualificationRejected` for invalid or mismatched identity,
 cross-subject or cross-fork evidence, malformed evidence, or manifest
-inconsistency. Advisory evaluator failure is retained as an unavailable
+inconsistency. Here malformed evidence means an invalid identity, envelope, or
+sealed manifest, not a rejected candidate observation that admission records
+without admitting. Advisory evaluator failure is retained as an unavailable
 advisory observation and does not change a hard claim or terminal result.
 
 `PromotionAuthorization` is bound to the exact rollout, target repository
